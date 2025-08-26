@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Collections;
 using Unity.Jobs;
+using System;
 
 namespace Assets.Scripts
 {
@@ -27,18 +28,18 @@ namespace Assets.Scripts
         protected int VertexCount { get; private set; } = 0;
 
         /// <summary>
-        /// The max number of neighbours to take into account
-        /// </summary>
-        [Header("Simulation Settings")]
-        [Min(0)]
-        protected byte MaxNeighbourCount = 6;
-
-        /// <summary>
         /// The number of batches used for parallel for jobs.
         /// </summary>
+        [Header("Simulation Settings")]
         [SerializeField]
         [Min(1)]
         protected int InnerLoopBatchCount = 64;
+
+        /// <summary>
+        /// The max number of neighbours to take into account
+        /// </summary>
+        [field: SerializeField]
+        protected byte MaxNeighbourCount { get; private set; } = 6;
 
         /// <summary>
         /// The stiffness of all simulated springs.
@@ -56,66 +57,74 @@ namespace Assets.Scripts
         // Job Variables
         private NativeArray<float> _adjustedDeltaTime = new(1, Allocator.Persistent);
         private NativeArray<float> _springConstant = new(1, Allocator.Persistent);
+        private NativeArray<byte> _maxNeighbourCount = new(1, Allocator.Persistent);
         private NativeArray<Vector3> _initialPositions;
         private NativeArray<Vector3> _positions;
         private NativeArray<Vector3> _velocities;
         private NativeArray<int> _neighbours;
         private NativeArray<byte> _neighbourCounts;
+        private NativeArray<Vector3> _neighbourForces;
+        private NativeArray<Vector3> _worldForces;
 
+        // Jobs
         private SetupJob _setupJob;
+        private NeighbourForceJob _neighbourForceJob;
         private DisplacementJob _displacementJob;
 
         // Handles
         private JobHandle _setupJobHandle;
+        private JobHandle _neighbourForceJobHandle;
         private JobHandle _displacementJobHandle;
-
-        public struct SetupJob : IJobParallelFor
-        {
-            public NativeArray<Vector3> Velocities;
-
-            public void Execute(int i)
-            {
-                Velocities[i] = Vector3.zero;
-            }
-        }
-
-        // Displaces Vertices
-        public struct DisplacementJob : IJobParallelFor
-        {
-            [ReadOnly]
-            public NativeArray<float> AdjustedDeltaTime;
-
-            [ReadOnly]
-            public NativeArray<float> SpringConstant;
-
-            [ReadOnly]
-            public NativeArray<Vector3> InitialPositions;
-
-            [NativeDisableParallelForRestriction]
-            public NativeArray<Vector3> Positions;
-
-            [NativeDisableParallelForRestriction]
-            public NativeArray<Vector3> Velocities;
-
-            public void Execute(int i)
-            {
-                // Calculate new position of Vertex with index i
-            }
-        }
 
         protected virtual void Awake()
         {
             MeshFilterComponent = GetComponent<MeshFilter>();
             Mesh = MeshFilterComponent.mesh;
-            LoadMeshData();
+            VertexCount = Mesh.vertices.Length;
 
-            _setupJob = new SetupJob { Velocities = _velocities };
+            _maxNeighbourCount[0] = MaxNeighbourCount;
+            _initialPositions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
+            _positions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
+            _velocities = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
+
+            _neighbourForces = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
+            _worldForces = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
+
+            _neighbourCounts = new NativeArray<byte>(VertexCount, Allocator.Persistent);
+            _neighbours = new NativeArray<int>(
+                VertexCount * MaxNeighbourCount,
+                Allocator.Persistent
+            );
+
+            //TODO: Remove once WorldForces work
+            _positions[0] += Vector3.up * 1;
+
+            _setupJob = new SetupJob
+            {
+                Velocities = _velocities,
+                NeighbourCounts = _neighbourCounts,
+                NeighbourForces = _neighbourForces,
+                WorldForces = _worldForces
+            };
+
+            _neighbourForceJob = new NeighbourForceJob
+            {
+                Positions = _positions,
+                InitialPositions = _initialPositions,
+                Velocities = _velocities,
+                Neighbours = _neighbours,
+                NeighbourCounts = _neighbourCounts,
+                MaxNeighbourCount = _maxNeighbourCount,
+                NeighbourForces = _neighbourForces
+            };
 
             _displacementJob = new DisplacementJob
             {
                 AdjustedDeltaTime = _adjustedDeltaTime,
                 SpringConstant = _springConstant,
                 InitialPositions = _initialPositions,
+                WorldForces = _worldForces,
+                NeighbourForces = _neighbourForces,
                 Positions = _positions,
                 Velocities = _velocities
             };
@@ -126,6 +135,7 @@ namespace Assets.Scripts
         protected virtual void Start()
         {
             _setupJobHandle.Complete();
+            LoadNeighbourData();
         }
 
         protected virtual void Update()
@@ -135,15 +145,24 @@ namespace Assets.Scripts
             _springConstant[0] = SpringConstant;
 
             // Schedule displacement job
-            _displacementJobHandle = _displacementJob.Schedule(VertexCount, InnerLoopBatchCount);
+            _neighbourForceJobHandle = _neighbourForceJob.Schedule(
+                VertexCount,
+                InnerLoopBatchCount
+            );
+            _displacementJobHandle = _displacementJob.Schedule(
+                VertexCount,
+                InnerLoopBatchCount,
+                _neighbourForceJobHandle
+            );
         }
 
         protected virtual void LateUpdate()
         {
+            _neighbourForceJobHandle.Complete();
             _displacementJobHandle.Complete();
             Mesh.SetVertices(_positions);
-
             Mesh.RecalculateNormals();
+            Mesh.RecalculateTangents();
         }
 
         protected virtual void OnDestroy()
@@ -152,13 +171,20 @@ namespace Assets.Scripts
             {
                 _setupJobHandle.Complete();
             }
+            if (!_neighbourForceJobHandle.IsCompleted)
+            {
+                _neighbourForceJobHandle.Complete();
+            }
             if (!_displacementJobHandle.IsCompleted)
             {
                 _displacementJobHandle.Complete();
             }
             _adjustedDeltaTime.Dispose();
             _springConstant.Dispose();
+            _maxNeighbourCount.Dispose();
             _initialPositions.Dispose();
+            _neighbourForces.Dispose();
+            _worldForces.Dispose();
             _positions.Dispose();
             _velocities.Dispose();
             _neighbourCounts.Dispose();
@@ -192,20 +218,8 @@ namespace Assets.Scripts
         /// <summary>
         /// Ideally this should be baked before start since it's a hefty calculation
         /// </summary>
-        protected virtual void LoadMeshData()
+        protected virtual void LoadNeighbourData()
         {
-            VertexCount = Mesh.vertices.Length;
-
-            _initialPositions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
-            _positions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
-            _velocities = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
-            _neighbours = new NativeArray<int>(
-                Mesh.vertices.Length * MaxNeighbourCount,
-                Allocator.Persistent
-            );
-
-            _neighbourCounts = new NativeArray<byte>(Mesh.vertices.Length, Allocator.Persistent);
-
             for (int triangleIndex = 0; triangleIndex < Mesh.triangles.Length; triangleIndex += 3)
             {
                 int vertex0 = Mesh.triangles[triangleIndex];

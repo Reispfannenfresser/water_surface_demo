@@ -219,7 +219,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   InnerLoopBatchCount: 64
-  SpringConstant: 0.025
+  <MaxNeighbourCount>k__BackingField: 6
+  SpringConstant: 1
   SimulationSpeed: 1
 --- !u!1 &627409185
 GameObject:
@@ -393,7 +394,7 @@ Light:
   m_InnerSpotAngle: 21.80208
   m_CookieSize: 10
   m_Shadows:
-    m_Type: 2
+    m_Type: 1
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 1
