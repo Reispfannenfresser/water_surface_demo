@@ -1,9 +1,6 @@
 using UnityEngine;
 using Unity.Collections;
 using Unity.Jobs;
-using System.Collections.Generic;
-using Unity.VisualScripting;
-using System;
 
 namespace Assets.Scripts
 {
