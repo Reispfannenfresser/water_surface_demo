@@ -59,7 +59,6 @@ namespace Assets.Scripts
         private NativeArray<Vector3> _initialPositions;
         private NativeArray<Vector3> _positions;
         private NativeArray<Vector3> _velocities;
-        private NativeArray<Vector3> _normals;
         private NativeArray<int> _neighbours;
         private NativeArray<byte> _neighbourCounts;
 
@@ -162,7 +161,6 @@ namespace Assets.Scripts
             _initialPositions.Dispose();
             _positions.Dispose();
             _velocities.Dispose();
-            _normals.Dispose();
             _neighbourCounts.Dispose();
             _neighbours.Dispose();
             Destroy(Mesh);
@@ -201,7 +199,6 @@ namespace Assets.Scripts
             _initialPositions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
             _positions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
             _velocities = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
-            _normals = new NativeArray<Vector3>(Mesh.normals, Allocator.Persistent);
             _neighbours = new NativeArray<int>(
                 Mesh.vertices.Length * MaxNeighbourCount,
                 Allocator.Persistent
