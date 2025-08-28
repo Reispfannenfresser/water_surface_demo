@@ -170,15 +170,7 @@ namespace Assets.Scripts
             _baseOffsetJobHandle.Complete();
             _displacementJobHandle.Complete();
 
-            // Update vertex positions
-            Vector3[] vertices = Mesh.vertices;
-            for (int vertexIndex = 0; vertexIndex < VertexCount; vertexIndex++)
-            {
-                vertices[vertexIndex].y = _positions[vertexIndex];
-            }
-            Mesh.vertices = vertices;
-            Mesh.RecalculateNormals();
-            Mesh.RecalculateTangents();
+            UpdateMesh();
         }
 
         protected virtual void OnDestroy()
@@ -205,6 +197,19 @@ namespace Assets.Scripts
             _baseOffsets.Dispose();
             _worldForces.Dispose();
             Destroy(Mesh);
+        }
+
+        protected virtual void UpdateMesh()
+        {
+            Vector3[] vertices = Mesh.vertices;
+            for (int vertexIndex = 0; vertexIndex < VertexCount; vertexIndex++)
+            {
+                vertices[vertexIndex].y = _positions[vertexIndex];
+            }
+            Mesh.vertices = vertices;
+
+            Mesh.RecalculateNormals();
+            Mesh.RecalculateTangents();
         }
 
         private void AddNeighbour(int vertex, int neighbourVertex)
