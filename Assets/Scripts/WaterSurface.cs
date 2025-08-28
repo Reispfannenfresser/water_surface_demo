@@ -42,11 +42,25 @@ namespace Assets.Scripts
         protected byte MaxNeighbourCount { get; private set; } = 6;
 
         /// <summary>
-        /// The stiffness of all simulated springs.
+        /// The mass attached to all springs.
+        /// </summary>
+        [Tooltip("The mass attached to each simulated spring.")]
+        [Min(0.001f)]
+        public float Mass = 1f;
+
+        /// <summary>
+        /// The stiffness of the springs.
         /// </summary>
         [Tooltip("The stiffness of the simulated springs.")]
+        [Min(0.001f)]
+        public float SpringConstant = 1f;
+
+        /// <summary>
+        /// The dampening of the springs.
+        /// </summary>
+        [Tooltip("The dampening of the springs.")]
         [Min(0)]
-        public float SpringConstant = 0.025f;
+        public float Dampening = 1f;
 
         /// <summary>
         /// The time scale of the simulation.
@@ -56,39 +70,38 @@ namespace Assets.Scripts
 
         // Job Variables
         private NativeArray<float> _adjustedDeltaTime = new(1, Allocator.Persistent);
-        private NativeArray<float> _springConstant = new(1, Allocator.Persistent);
+        private NativeArray<float> _alpha = new(1, Allocator.Persistent);
+        private NativeArray<float> _angularFrequency = new(1, Allocator.Persistent);
         private NativeArray<byte> _maxNeighbourCount = new(1, Allocator.Persistent);
-        private NativeArray<Vector3> _initialPositions;
-        private NativeArray<Vector3> _positions;
-        private NativeArray<Vector3> _velocities;
+        private NativeArray<float> _positions;
+        private NativeArray<float> _velocities;
         private NativeArray<int> _neighbours;
         private NativeArray<byte> _neighbourCounts;
-        private NativeArray<Vector3> _neighbourForces;
-        private NativeArray<Vector3> _worldForces;
+        private NativeArray<float> _baseOffsets;
+        private NativeArray<float> _worldForces;
 
         // Jobs
         private SetupJob _setupJob;
-        private NeighbourForceJob _neighbourForceJob;
+        private BaseOffsetJob _baseOffsetJob;
         private DisplacementJob _displacementJob;
 
         // Handles
         private JobHandle _setupJobHandle;
-        private JobHandle _neighbourForceJobHandle;
+        private JobHandle _baseOffsetJobHandle;
         private JobHandle _displacementJobHandle;
 
         protected virtual void Awake()
         {
             MeshFilterComponent = GetComponent<MeshFilter>();
             Mesh = MeshFilterComponent.mesh;
-            VertexCount = Mesh.vertices.Length;
+            VertexCount = Mesh.vertexCount;
 
             _maxNeighbourCount[0] = MaxNeighbourCount;
-            _initialPositions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
-            _positions = new NativeArray<Vector3>(Mesh.vertices, Allocator.Persistent);
-            _velocities = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
+            _positions = new NativeArray<float>(VertexCount, Allocator.Persistent);
+            _velocities = new NativeArray<float>(VertexCount, Allocator.Persistent);
 
-            _neighbourForces = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
-            _worldForces = new NativeArray<Vector3>(VertexCount, Allocator.Persistent);
+            _baseOffsets = new NativeArray<float>(VertexCount, Allocator.Persistent);
+            _worldForces = new NativeArray<float>(VertexCount, Allocator.Persistent);
 
             _neighbourCounts = new NativeArray<byte>(VertexCount, Allocator.Persistent);
             _neighbours = new NativeArray<int>(
@@ -96,35 +109,30 @@ namespace Assets.Scripts
                 Allocator.Persistent
             );
 
-            //TODO: Remove once WorldForces work
-            _positions[0] += Vector3.up * 1;
-
             _setupJob = new SetupJob
             {
                 Velocities = _velocities,
                 NeighbourCounts = _neighbourCounts,
-                NeighbourForces = _neighbourForces,
+                BaseOffsets = _baseOffsets,
                 WorldForces = _worldForces
             };
 
-            _neighbourForceJob = new NeighbourForceJob
+            _baseOffsetJob = new BaseOffsetJob
             {
                 Positions = _positions,
-                InitialPositions = _initialPositions,
-                Velocities = _velocities,
                 Neighbours = _neighbours,
                 NeighbourCounts = _neighbourCounts,
                 MaxNeighbourCount = _maxNeighbourCount,
-                NeighbourForces = _neighbourForces
+                BaseOffsets = _baseOffsets
             };
 
             _displacementJob = new DisplacementJob
             {
                 AdjustedDeltaTime = _adjustedDeltaTime,
-                SpringConstant = _springConstant,
-                InitialPositions = _initialPositions,
+                Alpha = _alpha,
+                AngularFrequency = _angularFrequency,
+                BaseOffsets = _baseOffsets,
                 WorldForces = _worldForces,
-                NeighbourForces = _neighbourForces,
                 Positions = _positions,
                 Velocities = _velocities
             };
@@ -135,32 +143,40 @@ namespace Assets.Scripts
         protected virtual void Start()
         {
             _setupJobHandle.Complete();
-            LoadNeighbourData();
+            LoadMeshData();
+
+            // TODO: Remove once WorldForces work
+            _positions[1700] += 10;
         }
 
         protected virtual void Update()
         {
             // Set job variables
             _adjustedDeltaTime[0] = Time.deltaTime * SimulationSpeed;
-            _springConstant[0] = SpringConstant;
+            _alpha[0] = Dampening / (2f * Mass);
+            _angularFrequency[0] = Mathf.Sqrt(SpringConstant / Mass - (_alpha[0] * _alpha[0]));
 
             // Schedule displacement job
-            _neighbourForceJobHandle = _neighbourForceJob.Schedule(
-                VertexCount,
-                InnerLoopBatchCount
-            );
+            _baseOffsetJobHandle = _baseOffsetJob.Schedule(VertexCount, InnerLoopBatchCount);
             _displacementJobHandle = _displacementJob.Schedule(
                 VertexCount,
                 InnerLoopBatchCount,
-                _neighbourForceJobHandle
+                _baseOffsetJobHandle
             );
         }
 
         protected virtual void LateUpdate()
         {
-            _neighbourForceJobHandle.Complete();
+            _baseOffsetJobHandle.Complete();
             _displacementJobHandle.Complete();
-            Mesh.SetVertices(_positions);
+
+            // Update vertex positions
+            Vector3[] vertices = Mesh.vertices;
+            for (int vertexIndex = 0; vertexIndex < VertexCount; vertexIndex++)
+            {
+                vertices[vertexIndex].y = _positions[vertexIndex];
+            }
+            Mesh.vertices = vertices;
             Mesh.RecalculateNormals();
             Mesh.RecalculateTangents();
         }
@@ -171,24 +187,23 @@ namespace Assets.Scripts
             {
                 _setupJobHandle.Complete();
             }
-            if (!_neighbourForceJobHandle.IsCompleted)
+            if (!_baseOffsetJobHandle.IsCompleted)
             {
-                _neighbourForceJobHandle.Complete();
+                _baseOffsetJobHandle.Complete();
             }
             if (!_displacementJobHandle.IsCompleted)
             {
                 _displacementJobHandle.Complete();
             }
             _adjustedDeltaTime.Dispose();
-            _springConstant.Dispose();
+            _angularFrequency.Dispose();
             _maxNeighbourCount.Dispose();
-            _initialPositions.Dispose();
-            _neighbourForces.Dispose();
-            _worldForces.Dispose();
             _positions.Dispose();
             _velocities.Dispose();
-            _neighbourCounts.Dispose();
             _neighbours.Dispose();
+            _neighbourCounts.Dispose();
+            _baseOffsets.Dispose();
+            _worldForces.Dispose();
             Destroy(Mesh);
         }
 
@@ -218,8 +233,17 @@ namespace Assets.Scripts
         /// <summary>
         /// Ideally this should be baked before start since it's a hefty calculation
         /// </summary>
-        protected virtual void LoadNeighbourData()
+        protected virtual void LoadMeshData()
         {
+            Vector3[] vertices = Mesh.vertices;
+
+            // Set initial positions
+            for (int vertexIndex = 0; vertexIndex < VertexCount; vertexIndex++)
+            {
+                _positions[vertexIndex] = vertices[vertexIndex].y;
+            }
+
+            // Load Neighbour Data
             for (int triangleIndex = 0; triangleIndex < Mesh.triangles.Length; triangleIndex += 3)
             {
                 int vertex0 = Mesh.triangles[triangleIndex];

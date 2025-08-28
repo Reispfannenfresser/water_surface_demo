@@ -6,17 +6,17 @@ namespace Assets.Scripts
 {
     public struct SetupJob : IJobParallelFor
     {
-        public NativeArray<Vector3> Velocities;
+        public NativeArray<float> Velocities;
         public NativeArray<byte> NeighbourCounts;
-        public NativeArray<Vector3> NeighbourForces;
-        public NativeArray<Vector3> WorldForces;
+        public NativeArray<float> BaseOffsets;
+        public NativeArray<float> WorldForces;
 
         public void Execute(int i)
         {
-            Velocities[i] = Vector3.zero;
+            Velocities[i] = 0;
             NeighbourCounts[i] = 0;
-            WorldForces[i] = Vector3.zero;
-            NeighbourForces[i] = Vector3.zero;
+            WorldForces[i] = 0;
+            BaseOffsets[i] = 0;
         }
     }
 }

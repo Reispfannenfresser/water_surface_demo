@@ -11,32 +11,40 @@ namespace Assets.Scripts
         public NativeArray<float> AdjustedDeltaTime;
 
         [ReadOnly]
-        public NativeArray<float> SpringConstant;
+        public NativeArray<float> Alpha;
 
         [ReadOnly]
-        public NativeArray<Vector3> InitialPositions;
+        public NativeArray<float> AngularFrequency;
 
         [ReadOnly]
-        public NativeArray<Vector3> NeighbourForces;
+        public NativeArray<float> BaseOffsets;
 
         [ReadOnly]
-        public NativeArray<Vector3> WorldForces;
+        public NativeArray<float> WorldForces;
 
-        public NativeArray<Vector3> Positions;
+        public NativeArray<float> Positions;
 
-        public NativeArray<Vector3> Velocities;
+        public NativeArray<float> Velocities;
 
         public void Execute(int i)
         {
-            Vector3 acceleration =
-                -SpringConstant[0] * (Positions[i] - InitialPositions[i])
-                + NeighbourForces[i]
-                + WorldForces[i];
-            Vector3 offset =
-                AdjustedDeltaTime[0] * Velocities[i]
-                + 0.5f * acceleration * AdjustedDeltaTime[0] * AdjustedDeltaTime[0];
-            Positions[i] += Vector3.Scale(Vector3.up, offset);
-            Velocities[i] += acceleration * AdjustedDeltaTime[0];
+            // dampened harmonic motion with base offset;
+            float c1 = Positions[i] - BaseOffsets[i];
+            float c2 = Velocities[i] / AngularFrequency[0];
+            float amplitude = Mathf.Sqrt(c1 * c1 + c2 * c2);
+            float initialPhase = Mathf.Atan2(c2, c1);
+
+            float innerCosPart = AngularFrequency[0] * AdjustedDeltaTime[0] + initialPhase;
+            float cosPart = Mathf.Cos(innerCosPart);
+            float expPart = Mathf.Exp(-Alpha[0] * AdjustedDeltaTime[0]);
+
+            Positions[i] = amplitude * cosPart * expPart + BaseOffsets[i];
+
+            // Derivative of position over time
+            Velocities[i] =
+                expPart
+                * amplitude
+                * (Alpha[0] * cosPart + Mathf.Sin(innerCosPart) * AngularFrequency[0]);
         }
     }
 }

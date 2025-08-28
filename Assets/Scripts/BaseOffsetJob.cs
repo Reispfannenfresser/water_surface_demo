@@ -1,20 +1,15 @@
-using UnityEngine;
 using Unity.Collections;
 using Unity.Jobs;
-using System;
 
 namespace Assets.Scripts
 {
-    public struct NeighbourForceJob : IJobParallelFor
+    /// <summary>
+    /// Calculates the average local water level of each vertex's direct neighbourhood.
+    /// </summary>
+    public struct BaseOffsetJob : IJobParallelFor
     {
         [ReadOnly]
-        public NativeArray<Vector3> Positions;
-
-        [ReadOnly]
-        public NativeArray<Vector3> InitialPositions;
-
-        [ReadOnly]
-        public NativeArray<Vector3> Velocities;
+        public NativeArray<float> Positions;
 
         [ReadOnly]
         public NativeArray<int> Neighbours;
@@ -25,20 +20,21 @@ namespace Assets.Scripts
         [ReadOnly]
         public NativeArray<byte> MaxNeighbourCount;
 
-        public NativeArray<Vector3> NeighbourForces;
+        public NativeArray<float> BaseOffsets;
 
         public void Execute(int i)
         {
             byte neighbourCount = NeighbourCounts[i];
-            Vector3 neighbourForce = Vector3.zero;
+            float baseOffset = Positions[i];
             for (int neighbourIndex = 0; neighbourIndex < neighbourCount; neighbourIndex++)
             {
+                // Get Vertex index of neighbour
                 int neighbour = Neighbours[i * MaxNeighbourCount[0] + neighbourIndex];
-                neighbourForce += Positions[neighbour];
-                neighbourForce -= InitialPositions[neighbour];
-            }
 
-            NeighbourForces[i] = neighbourForce * 0.1f;
+                // Add position of neighbour to baseOffset
+                baseOffset += Positions[neighbour];
+            }
+            BaseOffsets[i] = baseOffset / (neighbourCount + 1);
         }
     }
 }

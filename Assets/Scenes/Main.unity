@@ -205,7 +205,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 353782858}
-  m_Mesh: {fileID: 3474549315539186052, guid: bb4ca6d2a9e1a3d6eba67263274adcd2, type: 3}
+  m_Mesh: {fileID: 8917265774469112088, guid: bdb0199671185b4ec873f1e5e70f88b2, type: 3}
 --- !u!114 &353782862
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -220,7 +220,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   InnerLoopBatchCount: 64
   <MaxNeighbourCount>k__BackingField: 6
-  SpringConstant: 1
+  Mass: 1
+  SpringConstant: 0.1
+  Dampening: 0.025
   SimulationSpeed: 1
 --- !u!1 &627409185
 GameObject:
@@ -308,13 +310,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 627409185}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.35355338, y: -0.35355338, z: 0.1464466, w: 0.8535535}
-  m_LocalPosition: {x: 5, y: 5, z: -5}
+  m_LocalRotation: {x: 0.46193978, y: 0.33141357, z: -0.19134171, w: 0.8001032}
+  m_LocalPosition: {x: -30, y: 50, z: -30}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 45, y: -45, z: 0}
+  m_LocalEulerAnglesHint: {x: 60, y: 45, z: 0}
 --- !u!114 &627409189
 MonoBehaviour:
   m_ObjectHideFlags: 0
