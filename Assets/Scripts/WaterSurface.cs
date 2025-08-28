@@ -81,12 +81,10 @@ namespace Assets.Scripts
         private NativeArray<float> _worldForces;
 
         // Jobs
-        private SetupJob _setupJob;
         private BaseOffsetJob _baseOffsetJob;
         private DisplacementJob _displacementJob;
 
         // Handles
-        private JobHandle _setupJobHandle;
         private JobHandle _baseOffsetJobHandle;
         private JobHandle _displacementJobHandle;
 
@@ -109,14 +107,6 @@ namespace Assets.Scripts
                 Allocator.Persistent
             );
 
-            _setupJob = new SetupJob
-            {
-                Velocities = _velocities,
-                NeighbourCounts = _neighbourCounts,
-                BaseOffsets = _baseOffsets,
-                WorldForces = _worldForces
-            };
-
             _baseOffsetJob = new BaseOffsetJob
             {
                 Positions = _positions,
@@ -137,12 +127,12 @@ namespace Assets.Scripts
                 Velocities = _velocities
             };
 
-            _setupJobHandle = _setupJob.Schedule(VertexCount, InnerLoopBatchCount);
+            // _setupJobHandle = _setupJob.Schedule(VertexCount, InnerLoopBatchCount);
         }
 
         protected virtual void Start()
         {
-            _setupJobHandle.Complete();
+            //  _setupJobHandle.Complete();
             LoadMeshData();
 
             // TODO: Remove once WorldForces work
@@ -175,10 +165,6 @@ namespace Assets.Scripts
 
         protected virtual void OnDestroy()
         {
-            if (!_setupJobHandle.IsCompleted)
-            {
-                _setupJobHandle.Complete();
-            }
             if (!_baseOffsetJobHandle.IsCompleted)
             {
                 _baseOffsetJobHandle.Complete();
