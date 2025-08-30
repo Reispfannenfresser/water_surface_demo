@@ -2,7 +2,7 @@ using UnityEngine;
 using Unity.Collections;
 using Unity.Jobs;
 
-namespace Assets.Scripts
+namespace Assets.WaterSurface
 {
     // Displaces Vertices using provided velocity and forces
     public struct DisplacementJob : IJobParallelFor
