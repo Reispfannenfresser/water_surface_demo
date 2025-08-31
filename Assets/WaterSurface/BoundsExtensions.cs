@@ -9,9 +9,9 @@ namespace Assets.WaterSurface
             Vector3 maxCorner = Vector3.Min(bounds.max, other.max);
             Vector3 minCorner = Vector3.Max(bounds.min, other.min);
             Vector3 size = maxCorner - minCorner;
-            Vector3 center = (maxCorner + minCorner) * 0.5f;
             if (size.x > 0 && size.y > 0 && size.z > 0)
             {
+                Vector3 center = (maxCorner + minCorner) * 0.5f;
                 result = new(center, size);
                 return true;
             }

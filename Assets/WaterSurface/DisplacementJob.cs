@@ -19,9 +19,6 @@ namespace Assets.WaterSurface
         [ReadOnly]
         public NativeArray<float> BaseOffsets;
 
-        [ReadOnly]
-        public NativeArray<float> WorldForces;
-
         public NativeArray<float> Positions;
 
         public NativeArray<float> Velocities;

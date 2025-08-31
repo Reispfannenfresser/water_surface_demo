@@ -15,17 +15,17 @@ namespace Assets.WaterSurface
     {
         [Header("Surface Settings")]
         /// <summary>
-        /// The size of the water surface
+        /// The size of the water surface in units.
         /// </summary>
         [SerializeField]
-        [Tooltip("The size of the water surface")]
+        [Tooltip("The size of the water surface in units.")]
         private Vector2Int _size = Vector2Int.one * 10;
 
         /// <summary>
-        /// The depth at which Rigidbodies still influence the surface
+        /// The depth in units at which Rigidbodies still influence the surface.
         /// </summary>
         [SerializeField]
-        [Tooltip("The depth at which Rigidbodies still influence the surface")]
+        [Tooltip("The depth in units at which Rigidbodies still influence the surface.")]
         [Min(0.01f)]
         private float _depth = 1f;
 
@@ -41,10 +41,10 @@ namespace Assets.WaterSurface
         }
 
         /// <summary>
-        /// The number of simulated springs per unit
+        /// The number of simulated springs per unit.
         /// </summary>
         [SerializeField]
-        [Tooltip("The number of simulated springs per unit")]
+        [Tooltip("The number of simulated springs per unit.")]
         [Min(1)]
         private int _springDensity = 4;
 
@@ -57,11 +57,11 @@ namespace Assets.WaterSurface
         private int InnerLoopBatchCount = 64;
 
         /// <summary>
-        /// The mass attached to all springs.
+        /// The density of the liquid in kg/unit³.
         /// </summary>
-        [Tooltip("The mass attached to each simulated spring.")]
+        [Tooltip("The density of the liquid in kg/unit³.")]
         [Min(0.001f)]
-        public float Mass = 1f;
+        public float Density = 1f;
 
         /// <summary>
         /// The stiffness of the springs.
@@ -130,7 +130,6 @@ namespace Assets.WaterSurface
         private NativeArray<float> _springPositions;
         private NativeArray<float> _springVelocities;
         private NativeArray<float> _springBaseOffsets;
-        private NativeArray<float> _springWorldForces;
 
         private float _timeSinceUpdate = 0f;
 
@@ -157,7 +156,6 @@ namespace Assets.WaterSurface
             _springPositions = new NativeArray<float>(_springCount, Allocator.Persistent);
             _springVelocities = new NativeArray<float>(_springCount, Allocator.Persistent);
             _springBaseOffsets = new NativeArray<float>(_springCount, Allocator.Persistent);
-            _springWorldForces = new NativeArray<float>(_springCount, Allocator.Persistent);
 
             _baseOffsetJob = new BaseOffsetJob
             {
@@ -172,7 +170,6 @@ namespace Assets.WaterSurface
                 Alpha = _alpha,
                 AngularFrequency = _angularFrequency,
                 BaseOffsets = _springBaseOffsets,
-                WorldForces = _springWorldForces,
                 Positions = _springPositions,
                 Velocities = _springVelocities
             };
@@ -183,8 +180,9 @@ namespace Assets.WaterSurface
             for (int i = 0; i < Steps; i++)
             {
                 _adjustedDeltaTime[0] = Time.fixedDeltaTime * SimulationSpeed / Steps;
-                _alpha[0] = Dampening / (2f * Mass);
-                _angularFrequency[0] = Mathf.Sqrt(SpringConstant / Mass - (_alpha[0] * _alpha[0]));
+                float mass = Density / _springDensity / _springDensity * Depth;
+                _alpha[0] = Dampening / (2f * mass);
+                _angularFrequency[0] = Mathf.Sqrt(SpringConstant / mass - (_alpha[0] * _alpha[0]));
                 _baseOffsetJobHandle = _baseOffsetJob.Schedule(_springCount, InnerLoopBatchCount);
                 _displacementJobHandle = _displacementJob.Schedule(
                     _springCount,
@@ -209,68 +207,113 @@ namespace Assets.WaterSurface
             _timeSinceUpdate += Time.deltaTime;
         }
 
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="other"></param>
+        private void OnTriggerEnter(Collider other)
+        {
+            if (!other.bounds.TryGetOverlap(BoxColliderComponent.bounds, out Bounds overlap))
+            {
+                return;
+            }
+            if (!other.TryGetComponent<Rigidbody>(out Rigidbody rigidbody))
+            {
+                return;
+            }
+
+            Vector3 localMin = transform.InverseTransformPoint(overlap.min);
+            Vector3 localMax = transform.InverseTransformPoint(overlap.max);
+
+            Vector2 surfaceExtents = (Vector2)_size * 0.5f;
+
+            int startColumn = Math.Max(
+                (int)Mathf.Floor((localMin.x + surfaceExtents.x) * _springDensity),
+                0
+            );
+            int startRow = Math.Max(
+                (int)Mathf.Floor((localMin.z + surfaceExtents.y) * _springDensity),
+                0
+            );
+
+            int endColumn = Math.Min(
+                (int)Mathf.Ceil((localMax.x + surfaceExtents.x) * _springDensity),
+                _springGridSize[0] - 1
+            );
+            int endRow = Math.Min(
+                (int)Mathf.Ceil((localMax.z + surfaceExtents.y) * _springDensity),
+                _springGridSize[1] - 1
+            );
+
+            for (int row = startRow; row <= endRow; row++)
+            {
+                int rowIndex = row * _springGridSize[0];
+                for (int column = startColumn; column <= endColumn; column++)
+                {
+                    int index = rowIndex + column;
+                    _springVelocities[index] += rigidbody.linearVelocity.y;
+                }
+            }
+        }
+
         private void OnTriggerStay(Collider other)
         {
             if (!other.bounds.TryGetOverlap(BoxColliderComponent.bounds, out Bounds overlap))
             {
                 return;
             }
-
-            Rigidbody rigidbody = other.GetComponent<Rigidbody>();
-
-            float waterDensity = Mass * _springDensity * _springDensity;
-
+            if (!other.TryGetComponent<Rigidbody>(out Rigidbody rigidbody))
+            {
+                return;
+            }
             // Buoyancy
-            rigidbody.AddForce(Vector3.up * overlap.Volume() * waterDensity);
+            rigidbody.AddForce(-Density * overlap.Volume() * Physics.gravity, ForceMode.Force);
 
             // Resistance
             rigidbody.AddForce(
                 new(
                     -0.5f
+                        * Density
                         * Mathf.Sign(rigidbody.linearVelocity.x)
                         * rigidbody.linearVelocity.x
                         * rigidbody.linearVelocity.x
                         * overlap.size.y
-                        * overlap.size.z
-                        * waterDensity,
+                        * overlap.size.z,
                     -0.5f
+                        * Density
                         * Mathf.Sign(rigidbody.linearVelocity.y)
                         * rigidbody.linearVelocity.y
                         * rigidbody.linearVelocity.y
                         * overlap.size.x
-                        * overlap.size.z
-                        * waterDensity,
+                        * overlap.size.z,
                     -0.5f
+                        * Density
                         * Mathf.Sign(rigidbody.linearVelocity.z)
                         * rigidbody.linearVelocity.z
                         * rigidbody.linearVelocity.z
                         * overlap.size.x
                         * overlap.size.y
-                        * waterDensity
-                )
+                ),
+                ForceMode.Force
             );
-
-            float velocity = rigidbody.linearVelocity.y;
         }
 
-        private void UpdateMesh()
+        private void OnDestroy()
         {
-            float t = _timeSinceUpdate / Time.fixedDeltaTime;
-
-            Vector3[] vertices = MeshFilterComponent.sharedMesh.vertices;
-            for (int v = 0; v < _springCount; v++)
+            if (!_baseOffsetJobHandle.IsCompleted)
             {
-                vertices[v].y = Mathf.Lerp(vertices[v].y, _springPositions[v], t);
+                _baseOffsetJobHandle.Complete();
             }
-            MeshFilterComponent.sharedMesh.vertices = vertices;
-            MeshFilterComponent.sharedMesh.RecalculateNormals();
-            MeshFilterComponent.sharedMesh.RecalculateTangents();
+            if (!_displacementJobHandle.IsCompleted)
+            {
+                _displacementJobHandle.Complete();
+            }
+            _springGridSize.Dispose();
+            _adjustedDeltaTime.Dispose();
+            _alpha.Dispose();
+            _angularFrequency.Dispose();
+            _springPositions.Dispose();
+            _springVelocities.Dispose();
+            _springBaseOffsets.Dispose();
         }
 
+#if UNITY_EDITOR
         private async void OnValidate()
         {
             // Min size in either direction should be 0
@@ -289,6 +332,32 @@ namespace Assets.WaterSurface
             await Awaitable.NextFrameAsync();
 
             GetComponent<MeshFilter>().sharedMesh = GenerateMesh();
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = Color.green;
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.DrawWireCube(new(0, -0.5f * _depth, 0), new(_size.x, _depth, _size.y));
+        }
+#endif
+
+        private void UpdateMesh()
+        {
+            float t = _timeSinceUpdate / Time.fixedDeltaTime;
+
+            Vector3[] vertices = MeshFilterComponent.sharedMesh.vertices;
+            for (int v = 0; v < _springCount; v++)
+            {
+                vertices[v].y = Mathf.Lerp(
+                    vertices[v].y,
+                    _springPositions[v] - _springBaseOffsets[v],
+                    t
+                );
+            }
+            MeshFilterComponent.sharedMesh.vertices = vertices;
+            MeshFilterComponent.sharedMesh.RecalculateNormals();
+            MeshFilterComponent.sharedMesh.RecalculateTangents();
         }
 
         private Mesh GenerateMesh()
@@ -337,33 +406,6 @@ namespace Assets.WaterSurface
             mesh.RecalculateTangents();
 
             return mesh;
-        }
-
-        private void OnDrawGizmos()
-        {
-            Gizmos.color = Color.green;
-            Gizmos.matrix = transform.localToWorldMatrix;
-            Gizmos.DrawWireCube(new(0, -0.5f * _depth, 0), new(_size.x, _depth, _size.y));
-        }
-
-        private void OnDestroy()
-        {
-            if (!_baseOffsetJobHandle.IsCompleted)
-            {
-                _baseOffsetJobHandle.Complete();
-            }
-            if (!_displacementJobHandle.IsCompleted)
-            {
-                _displacementJobHandle.Complete();
-            }
-            _springGridSize.Dispose();
-            _adjustedDeltaTime.Dispose();
-            _alpha.Dispose();
-            _angularFrequency.Dispose();
-            _springPositions.Dispose();
-            _springVelocities.Dispose();
-            _springBaseOffsets.Dispose();
-            _springWorldForces.Dispose();
         }
     }
 }
