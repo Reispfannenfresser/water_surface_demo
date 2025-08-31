@@ -4,23 +4,44 @@ using Unity.Jobs;
 
 namespace Assets.WaterSurface
 {
-    // Displaces Vertices using provided velocity and forces
-    public struct DisplacementJob : IJobParallelFor
+    /// <summary>
+    /// Simulates springs using dampened harmonic motion.
+    /// </summary>
+    internal struct DisplacementJob : IJobParallelFor
     {
+        /// <summary>
+        /// The time that has passed since the last displacement.
+        /// </summary>
         [ReadOnly]
         public NativeArray<float> AdjustedDeltaTime;
 
+        /// <summary>
+        /// Exponent for dampened harmonic motion.
+        /// </summary>
         [ReadOnly]
         public NativeArray<float> Alpha;
 
+        /// <summary>
+        /// The angular frequency of the dampened harmonic motion.
+        /// This is different to the angular frequency of simple harmonic motion.
+        /// </summary>
         [ReadOnly]
         public NativeArray<float> AngularFrequency;
 
+        /// <summary>
+        /// The average local height of each springs direct neighbourhood.
+        /// </summary>
         [ReadOnly]
         public NativeArray<float> BaseOffsets;
 
+        /// <summary>
+        /// The initial positions of the springs. The contents of this NativeArray will be overriden with the new positions.
+        /// </summary>
         public NativeArray<float> Positions;
 
+        /// <summary>
+        /// The initial velocities of the springs. The contents of this NativeArray will be overriden with the new velocities.
+        /// </summary>
         public NativeArray<float> Velocities;
 
         public void Execute(int i)

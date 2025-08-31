@@ -4,20 +4,29 @@ using Unity.Jobs;
 namespace Assets.WaterSurface
 {
     /// <summary>
-    /// Calculates the average local water level of each vertex's direct neighbourhood.
+    /// Calculates the average local height of each spring's direct neighbourhood.
     /// </summary>
-    public struct BaseOffsetJob : IJobParallelFor
+    internal struct BaseOffsetJob : IJobParallelFor
     {
+        /// <summary>
+        /// The positions of the springs.
+        /// </summary>
         [ReadOnly]
         public NativeArray<float> Positions;
 
+        /// <summary>
+        /// The velocities of the springs.
+        /// </summary>
         [ReadOnly]
         public NativeArray<int> SpringGridSize;
 
+        /// <summary>
+        /// The contents of this NativeArray will be overriden with the calculated average local height of each springs direct neighbourhood.
+        /// </summary>
         public NativeArray<float> BaseOffsets;
 
         /// <summary>
-        /// the influence each nearby vertex has
+        /// The influence each nearby spring has.
         /// </summary>
         private static readonly float[,] _kernel =
         {
