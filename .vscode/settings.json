@@ -66,6 +66,6 @@
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj"
     },
-    "dotnet.defaultSolution": "water_surface.sln",
+    "dotnet.defaultSolution": "water_surface.slnx",
     "editor.defaultFormatter": "csharpier.csharpier-vscode"
 }
