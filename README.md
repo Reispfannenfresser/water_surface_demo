@@ -1,3 +1,3 @@
-This project contains a simple spring based water surface simulation in Unity using the c# job system.
-Rectangular water surfaces can be created, edited and simulated.
-The surfaces allow rigidbody interactions using simple buoyancy and drag simulations.
+This project contains a small demo of
+[https://github.com/Reispfannenfresser/water_surface](https://github.com/Reispfannenfresser/water_surface) \
+(a spring based water surface simulation in Unity using the c# job system.)
