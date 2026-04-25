@@ -1,0 +1,3 @@
+[submodule "Assets/WaterSurface"]
+	path = Assets/WaterSurface
+	url = git@github.com:Reispfannenfresser/water_surface.git
