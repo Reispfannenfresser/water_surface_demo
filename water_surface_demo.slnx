@@ -1,4 +1,4 @@
 ﻿<Solution>
   <Project Path="Assets.Scripts.csproj" />
-  <Project Path="Assets.WaterSurface.csproj" />
+  <Project Path="WaterSurface.csproj" />
 </Solution>
